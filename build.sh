@@ -19,6 +19,7 @@ exe() { echo "\$ $@"; "$@"; }
 
 versions() {
   echo "Supported versions:"
+  echo "- 12      Latest GCC 12 release"  
   echo "- master  Latest master branch on the main GCC git repo"
 }
 
@@ -50,6 +51,26 @@ checkout() {
   fi	
 }
 
+# Check status of previous operation
+# Usage: `status [error-code] [phase-name] [logfile]
+status() {
+  ierr=$?
+  errcode=$1  
+  phase="$2"  
+  logfile="$3"  
+  if [ ${ierr} -ne 0 ]; then
+    stamp "${phase^} phase failed with error ${ierr}"
+    stamp "Check $3 for more details"
+    exit $1
+  else
+    stamp "Finished ${phase} phase!"
+    # Compress logfile
+    stamp "Compressing ${logfile}..."
+    xz ${logfile}
+    stamp "Compressed into ${logfile}.xz"
+  fi  
+}
+
 # Threads for make -j
 NTHR=12
 
@@ -59,7 +80,8 @@ GCCGIT="git://gcc.gnu.org/git/gcc.git"
 # Versions
 VER=""
 declare -a VERS
-VERS+="master"
+VERS+=("12")
+VERS+=("master")
 
 # Directories and branches/tags
 ROOTDIR="$(pwd)"
@@ -71,6 +93,11 @@ TREE=""
 SRCDIR_MASTER="${ROOTDIR}/src"
 BLDDIR_MASTER="${ROOTDIR}/build/master"
 TREE_MASTER="master"
+
+# GCC 12 release tag
+SRCDIR_12="${ROOTDIR}/src"
+BLDDIR_12="${ROOTDIR}/build/gcc-12"
+TREE_12="releases/gcc-12"
 
 # Prerequisites
 declare -a PREREQS
@@ -100,6 +127,10 @@ CFG+=("${NOBOOTSTRAP}")
 CFG+=("${NOSANITIZER}")
 CFG+=("${NOMULTILIB}")
 CFG+=("--prefix=${BLDDIR}")
+
+# Set up tests
+declare -a TST
+TST+=("check")
 
 # Logfiles
 NOW="$(now)"
@@ -151,49 +182,36 @@ else
 
   popd # SRCDIR
 
-fi
+fi # SRCDIR
 
 # Delete and recreate build directory if it exists
 if [ -d "${BLDDIR}" ]; then
   exe rm -rf "${BLDDIR}"
-  exe mkdir -p "${BLDDIR}"
 fi
+exe mkdir -p "${BLDDIR}"
 
 pushd "${BLDDIR}"
 
   # Configure
   stamp "Configure..."
   CFGSCR="${SRCDIR}/configure"
-  echo "$ ${CFGSCR} ${CFG[@]} 2&>1 > ${CFGLOG}"
-  "${CFGSCR}" ${CFG[@]} 2&>1 > ${CFGLOG}
-
-  status=$?
-  if [ ${status} -ne 0 ]; then
-    stamp "Configure failed with error ${status}"
-    stamp "Check ${CFGLOG} for more details"
-    exit 3
-  else
-    # Compress configure logfile
-    xz ${CFGLOG}
-  fi
+  echo "$ ${CFGSCR} ${CFG[@]} > ${CFGLOG} 2>&1"
+  "${CFGSCR}" ${CFG[@]} > ${CFGLOG} 2>&1
+  status 3 "configure" "${CFGLOG}"
 
   # Build
   stamp "Build..."
-  echo "$ make -j ${NTHR} 2&>1 > ${BLDLOG}"
-  make -j ${NTHR} 2&>1 > ${BLDLOG}
-
-  status=$?
-  if [ ${status} -ne 0 ]; then
-    stamp "Build failed with error ${status}"
-    stamp "Check ${BLDLOG} for more details"
-    exit 3
-  else
-    # Compress build logfile
-    xz ${BLDLOG}
-  fi
+  echo "$ make -j ${NTHR} > ${BLDLOG} 2>&1"
+  make -j ${NTHR} > ${BLDLOG} 2>&1
+  status 4 "build" "${BLDLOG}"
 
   # Test
-  #stamp "Test..."
+  stamp "Test..."
+  for t in "${TST[@]}"; do
+    echo "$ make -k $t > ${TSTLOG} 2>&1"
+    make -k $t > ${TSTLOG} 2>&1
+  done
+  status 5 "test" "${TSTLOG}"
 
   # Install
   #stamp "Install..."
