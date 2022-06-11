@@ -3,13 +3,21 @@
 whatscr() { echo "gccprefab - Wil's GCC easy build script"; }
 whenscr() { echo "Last updated: Jun 11, 2022 (WYP)"; }
 
-usage() { echo "Usage: $0 [configfile]"; }
+usage() { echo "Usage: $0 [options] configfile"; }
+
+helptext() {
+  echo "Available options:"
+  echo "  -h, --help      Display this help text"
+  # echo "  -v, --verbose   Verbose mode" # FIXME
+  echo "  -V, --versions  List available versions to build"
+}
 
 stamp() { echo "$(date) $@"; }
 now() { date "+%Y%m%d-%H%M%z"; }
 
 push_flag() { FLAGS+=("$1"); }
 push_lang() { LANGUAGES+=("$1"); }
+push_check() { CHECKS+=("$1"); }
 
 # Taken from https://stackoverflow.com/a/23342259
 exe() { echo "\$ $@"; "$@"; }
@@ -62,6 +70,7 @@ readcfg() {
     FLAG_YES="--enable-"
     FLAG_NO="--disable-"
     FLAG_WITH="--with-"
+    FLAG_CHK="check-"
 
     stamp "Reading config file $2"
     while read -r line; do
@@ -197,14 +206,20 @@ readcfg() {
 
 	elif [ "${SEC}" == "languages" ]; then
 
-	  if [ "${line}" == "default" ]; then
+	  if [ "${line}" == "default" ]; then	
 	    def_languages
 	    verb 1 "Using default languages: ${LANGUAGES[@]}"
 	  fi # default
 
+	elif [ "${SEC}" == "checks" ]; then
+
+	  CHECK="${FLAG_CHK}${line}"
+          push_check "${CHECK}"
+	  verb 1 "Add test: ${CHECK}"
+
 	else
 
-	  echo "Not implemented for section ${SEC}"
+	  echo "Option ${line} not implemented for section ${SEC}"
 
 	fi # sec
 
@@ -270,16 +285,17 @@ def_languages() {
   push_lang "fortran"
 }
 
-# Check argc and bail out if no versions are specified
+# Check argc and bail out if no options or build config files are specified
 if [ $# -lt 1 ]; then
   usage; versions; exit 0
 else
   case "$1" in
-    "-h" | "--help" ) whatscr; whenscr; usage; versions; exit 0 ;;
-    "-v" | "--verbose" ) export VERBOSE=1; shift 1 ;;
+    "-h" | "--help" ) whatscr; whenscr; usage; helptext; versions; exit 0 ;;
+    # "-v" | "--verbose" ) export VERBOSE=1; shift 1 ;; # FIXME
     "-V" | "--versions" ) versions; exit 0 ;;
     * )
-      readcfg 1 "$1"
+      # Read build config file
+      readcfg -1 "$1"
       FLAGS+=("--languages=$(commalist ${LANGUAGES[@]})")	
       ;;
   esac
@@ -292,19 +308,19 @@ FLAGS+=("--prefix=${BLDDIR}")
 
 # Set up tests
 declare -a CHECKS
-CHECKS+=("check-fortran")
 
 # Logfiles
 NOW="$(now)"
 CFGLOG="${ROOTDIR}/${NOW}-configure-gcc${VER}.log"
 BLDLOG="${ROOTDIR}/${NOW}-build-gcc${VER}.log"
 TSTLOG="${ROOTDIR}/${NOW}-test-gcc${VER}.log"
+INSLOG="${ROOTDIR}/${NOW}-install-gcc${VER}.log"
 
 # Start the build
 whatscr; whenscr
 stamp "Building GCC ${VER}"
-stamp "Source: ${SRCDIR}"
-stamp "Build:  ${BLDDIR}"
+stamp "Source dir: ${SRCDIR}"
+stamp "Build dir:  ${BLDDIR}"
 
 if [ ! -d "${SRCDIR}" ]; then
 
@@ -371,11 +387,11 @@ pushd "${BLDDIR}"
 
   # Test
   stamp "Test..."
-  for t in "${TST[@]}"; do
+  for t in "${CHECKS[@]}"; do
     echo "$ make -k $t > ${TSTLOG} 2>&1"
     make -k $t > ${TSTLOG} 2>&1
+    status 5 "test" "${TSTLOG}"
   done
-  status 5 "test" "${TSTLOG}"
 
   # Install
   #stamp "Install..."
