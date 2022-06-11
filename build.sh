@@ -1,7 +1,7 @@
 \#!/bin/bash
 
 whatscr() { echo "gccprefab - Wil's GCC easy build script"; }
-whenscr() { echo "Last updated: Jun 6, 2022 (WYP)"; }
+whenscr() { echo "Last updated: Jun 11, 2022 (WYP)"; }
 
 usage() { echo "Usage: $0 [configfile]"; }
 
