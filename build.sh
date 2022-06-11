@@ -1,51 +1,41 @@
-#!/bin/bash
+\#!/bin/bash
 
 whatscr() { echo "gccprefab - Wil's GCC easy build script"; }
-whenscr() { echo "Last updated: Jun 4, 2022 (WYP)"; }
+whenscr() { echo "Last updated: Jun 6, 2022 (WYP)"; }
 
-usage() { echo "Usage: $0 [version]"; }
+usage() { echo "Usage: $0 [configfile]"; }
 
 stamp() { echo "$(date) $@"; }
 now() { date "+%Y%m%d-%H%M%z"; }
 
-# Bash double substitution
-dblsub() {
-  CAPS="$(echo $(eval echo \$$2) | tr [:lower:] [:upper:])"
-  VAR="$(echo "$1_${CAPS}")"
-  export "$1"="$(eval echo "\$${VAR}")"
-}
-
-pusharr() { "$1"+=("$2"); }
-poparr() {}
+push_flag() { FLAGS+=("$1"); }
+push_lang() { LANGUAGES+=("$1"); }
 
 # Taken from https://stackoverflow.com/a/23342259
 exe() { echo "\$ $@"; "$@"; }
 
+# Output the value for a given key $1 inside the config file $2
+grepln() { grep "$1=" "$2" | awk -F '=' '{print $2}'; }
+
+# Read value from line $1
+readvar() { echo "$1" | awk -F '=' '{print $2}'; }
+
+# Output message $2 is verbosity is >= level $1
+verb() { if [ ${VERBOSE} -ge $1 ]; then echo "$2"; fi; }
+
+# Turn a Bash array into a comma-separated list
+# Adapted from https://stackoverflow.com/a/16203497
+# Usage: `export ENVVAR=$(commalist ${ARRAY[@]})`
+commalist() { echo "$*" | awk -v OFS=',' '$1=$1'; }
+
 versions() {
   echo "Supported versions:"
-  echo "- 11      Latest GCC 11 release"
-  echo "- 12      Latest GCC 12 release"
-  echo "- master  Latest master branch on the main GCC git repo"
-  echo "- dev     Current development branch"
-}
-
-parsever() {
-  found=0
-  for v in "${VERS[@]}"; do
-    if [ "$1" == "$v" ]; then
-      found=1
-      VER="$v"
-    fi
+  VERS="$(ls -1 *.cfg | tr "\n" ' ')"
+  for cfg in ${VERS}; do
+    VERSTR=$(grepln "ver" "${cfg}")
+    VERDESC=$(grepln "desc" "${cfg}")
+    echo -e "- ${cfg}\t${VERSTR}\t${VERDESC}"
   done
-  if [ ${found} -ne 1 ]; then
-    echo "Unsupported version $1"
-    versions
-    exit 1
-  else
-    dblsub SRCDIR VER
-    dblsub BLDDIR VER
-    dblsub TREE VER
-  fi
 }
 
 checkout() {
@@ -71,50 +61,62 @@ readcfg() {
     SEC=""
     FLAG_YES="--enable-"
     FLAG_NO="--disable-"
+    FLAG_WITH="--with-"
 
+    stamp "Reading config file $2"
     while read -r line; do
 
       pfx="${line:0:1}"
+      eq=$(echo ${line} | grep -c -v '=')
 
-      if [ "${pfx}" == "[" ]; then
+      if [ -z "${line}" ]; then
+
+	# Empty line (treat as end of section)
+	SEC=""
+        verb 1 "=========="
+
+      elif [ "${pfx}" == "[" ]; then
 
 	# Section header
 	SEC="${line:1:(-1)}"
 	verb 1 "Section header: ${SEC}"
 
-      elif [ "${pfx}" == "+" ]; then
-
+      elif [ "${pfx}" == '+' ]; then
+	val=$(echo "${line}" | awk -F '+' '{print $2}')
+	  
 	if [ "${SEC}" == "flags" ]; then
 
 	  # Add flag
-	  FLAG="${FLAG_YES}${line:1::}"
-          pusharr FLAGS FLAG
+	  FLAG="${FLAG_YES}${val}"
+          push_flag "${FLAG}"
 	  verb 1 "Addition flag: ${FLAG}"
 
 	elif [ "${SEC}" == "languages" ]; then
 
 	  # Add language
-	  LANG="${line}"
-	  pusharr LANGUAGES LANG
+	  LANG="${val}"
+	  push_lang "${LANG}"
 	  verb 1 "Add language: ${LANG}"
+
+	else
+
+	  echo "Addition not implemented for section ${SEC}"
 
 	fi # sec
 	    
-      elif [ "${pfx}" == "~" ]; then
+      elif [ "${pfx}" == '~' ]; then
+	val=$(echo "${line}" | awk -F '~' '{print $2}')
 
 	if [ "${SEC}" == "flags" ]; then
 
 	  # Subtract flag
-	  FLAG="${FLAG_NO}${line:1::}"
-          pusharr FLAGS FLAG
-	  verb "Removal flag: ${FLAG}"
+	  FLAG="${FLAG_NO}${val}"
+          push_flag "${FLAG}"
+	  verb 1 "Removal flag: ${FLAG}"
 
-	elif [ "${SEC}" == "languages" ]; then
+	else
 
-	  # Remove language
-	  LANG="${line}"
-	  poparr LANGUAGES LANG  
-	  verb "Remove language: ${LANG}"
+	  echo "Removal not implemented for section ${SEC}"
 
 	fi # sec
 
@@ -122,20 +124,87 @@ readcfg() {
 
 	if [ "${SEC}" == "version" ]; then
 
-	  # Version code
-	  export VER="${line}"
-	    
+	  if [ ${eq} ]; then
+	    case "${line}" in
+  
+	      ver* )
+		# Version code
+		export VER=$(readvar "${line}")
+		verb 1 "Version code: ${VER}"
+		;;
+
+	      desc* )
+	        # Version description
+	        export DESC=$(readvar "${line}")
+		verb 1 "Version description: ${DESC}"
+		;;
+
+	      git* )
+		# Custom Git repo link
+	        export CUSTOMGIT=$(readvar "${line}")
+		verb 1 "Using custom Git repo at ${CUSTOMGIT}"
+		;;
+
+	      source* )
+		# Source directory
+		export SRCDIR=$(eval echo $(readvar "${line}"))
+		;;
+
+	      build* )
+		# Build directory
+		export BLDDIR=$(eval echo $(readvar "${line}"))
+		;;
+
+	      tree* )
+		# Git branch to build
+		export TREE=$(readvar "${line}")
+		;;
+	      
+	      * )
+		echo "Unsupported key pair ${line}"
+		;;
+
+	    esac # line
+	  else
+	    echo "Please use a key=val pair in section ${SEC} instead of ${line}"
+	  fi # eq
+
+	elif [ "${SEC}" == "build" ]; then
+
+	  if [ eq ]; then
+	    case "${line}" in
+
+	      njobs* )
+		# Number of jobs for `make -j`
+		export NJOBS=$(readvar "${line}")
+		;;
+
+	      * )
+		echo "Unsupported key pair ${line}"
+		;;
+
+	    esac # line
+	  else
+	    echo "Please use a key=val pair in section ${SEC} instead of ${line}"
+	  fi # eq
+	  
 	elif [ "${SEC}" == "flag" ]; then
 
 	  # Normal flag
-	  FLAG="${FLAG_YES}${line:1::}"
-          pusharr FLAGS FLAG
-	  verb 1 "Addition flag: ${FLAG}"
+	  FLAG="${line}"
+          push_flag "${FLAG}"
+	  verb 1 "Normal flag: ${FLAG}"
+
+	elif [ "${SEC}" == "languages" ]; then
+
+	  if [ "${line}" == "default" ]; then
+	    def_languages
+	    verb 1 "Using default languages: ${LANGUAGES[@]}"
+	  fi # default
 
 	else
 
-	  # Defaults
-	  def_languages
+	  echo "Not implemented for section ${SEC}"
 
 	fi # sec
 
@@ -165,18 +234,12 @@ status() {
   fi  
 }
 
-# Threads for make -j
-NTHREADS=12
-
 # Git repo URL
 GCCGIT="git://gcc.gnu.org/git/gcc.git"
+CUSTOMGIT=""
 
-# Versions
+# Version to build
 VER=""
-declare -a VERS
-VERS+=("11")
-VERS+=("12")
-VERS+=("master")
 
 # Directories and branches/tags
 ROOTDIR="$(pwd)"
@@ -184,25 +247,13 @@ SRCDIR=""
 BLDDIR=""
 TREE=""
 
+# Verbosity
+VERBOSE=0
+
 # Current development branch
 SRCDIR_DEV="${ROOTDIR}/src"
 BLDDIR_DEV="${ROOTDIR}/build/dev"
 TREE_DEV=$(git branch --show-current)
-
-# GCC master branch
-SRCDIR_MASTER="${ROOTDIR}/src"
-BLDDIR_MASTER="${ROOTDIR}/build/master"
-TREE_MASTER="master"
-
-# GCC 11 release tag
-SRCDIR_11="${ROOTDIR}/src"
-BLDDIR_11="${ROOTDIR}/build/gcc-11"
-TREE_11="releases/gcc-11"
-
-# GCC 12 release tag
-SRCDIR_12="${ROOTDIR}/src"
-BLDDIR_12="${ROOTDIR}/build/gcc-12"
-TREE_12="releases/gcc-12"
 
 # Prerequisites
 declare -a PREREQS
@@ -214,25 +265,29 @@ PREREQS+=("mpfr")
 # Languages
 declare -a LANGUAGES
 def_languages() {
-  pusharr LANGUAGES "c"
-  pusharr LANGUAGES "c++"
-  pusharr LANGUAGES "fortran"
+  push_lang "c"
+  push_lang "c++"
+  push_lang "fortran"
 }
 
 # Check argc and bail out if no versions are specified
 if [ $# -lt 1 ]; then
   usage; versions; exit 0
 else
-  parsever "$1"
-fi
+  case "$1" in
+    "-h" | "--help" ) whatscr; whenscr; usage; versions; exit 0 ;;
+    "-v" | "--verbose" ) export VERBOSE=1; shift 1 ;;
+    "-V" | "--versions" ) versions; exit 0 ;;
+    * )
+      readcfg 1 "$1"
+      FLAGS+=("--languages=$(commalist ${LANGUAGES[@]})")	
+      ;;
+  esac
+fi # argc
 
 # Set up configure flags
 CFGFLAGS=""
 declare -a FLAGS
-FLAGS+=("${LANGUAGES}")
-FLAGS+=("${NOBOOTSTRAP}")
-FLAGS+=("${NOSANITIZER}")
-FLAGS+=("${NOMULTILIB}")
 FLAGS+=("--prefix=${BLDDIR}")
 
 # Set up tests
@@ -304,14 +359,14 @@ pushd "${BLDDIR}"
   # Configure
   stamp "Configure..."
   CFGSCR="${SRCDIR}/configure"
-  echo "$ ${CFGSCR} ${CFG[@]} > ${CFGLOG} 2>&1"
+  echo "$ ${CFGSCR} ${FLAGS[@]} > ${CFGLOG} 2>&1"
   "${CFGSCR}" ${CFG[@]} > ${CFGLOG} 2>&1
   status 3 "configure" "${CFGLOG}"
 
   # Build
   stamp "Build..."
-  echo "$ make -j ${NTHR} > ${BLDLOG} 2>&1"
-  make -j ${NTHR} > ${BLDLOG} 2>&1
+  echo "$ make -j ${NJOBS} > ${BLDLOG} 2>&1"
+  make -j ${NJOBS} > ${BLDLOG} 2>&1
   status 4 "build" "${BLDLOG}"
 
   # Test
