@@ -268,7 +268,7 @@ VERBOSE=0
 # Current development branch
 SRCDIR_DEV="${ROOTDIR}/src"
 BLDDIR_DEV="${ROOTDIR}/build/dev"
-TREE_DEV=$(git branch --show-current)
+TREE_DEV=
 
 # Prerequisites
 declare -a PREREQS
@@ -285,6 +285,14 @@ def_languages() {
   push_lang "fortran"
 }
 
+# Set up configure flags
+CFGFLAGS=""
+declare -a FLAGS
+FLAGS+=("--prefix=${BLDDIR}")
+
+# Set up list of tests
+declare -a CHECKS
+
 # Check argc and bail out if no options or build config files are specified
 if [ $# -lt 1 ]; then
   usage; versions; exit 0
@@ -300,14 +308,6 @@ else
       ;;
   esac
 fi # argc
-
-# Set up configure flags
-CFGFLAGS=""
-declare -a FLAGS
-FLAGS+=("--prefix=${BLDDIR}")
-
-# Set up tests
-declare -a CHECKS
 
 # Logfiles
 NOW="$(now)"
@@ -387,7 +387,7 @@ pushd "${BLDDIR}"
 
   # Test
   stamp "Test..."
-  for t in "${CHECKS[@]}"; do
+  for t in ${CHECKS[@]}; do
     echo "$ make -k $t > ${TSTLOG} 2>&1"
     make -k $t > ${TSTLOG} 2>&1
     status 5 "test" "${TSTLOG}"
