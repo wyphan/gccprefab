@@ -157,16 +157,25 @@ readcfg() {
 	      source* )
 		# Source directory
 		export SRCDIR=$(eval echo $(readvar "${line}"))
+		verb 1 "Using source directory ${SRCDIR}"  
 		;;
 
 	      build* )
 		# Build directory
 		export BLDDIR=$(eval echo $(readvar "${line}"))
+		verb 1 "Using build directory ${BLDDIR}"  
 		;;
 
 	      tree* )
 		# Git branch to build
 		export TREE=$(readvar "${line}")
+		verb 1 "Using Git branch ${TREE}"  
+		;;
+
+	      tag*)
+		# Git tag to build
+		export TREE=$(readvar "${line}")
+		verb 1 "Using Git tag ${TREE}"
 		;;
 	      
 	      * )
