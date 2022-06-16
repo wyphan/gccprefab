@@ -182,7 +182,7 @@ readcfg() {
 
 	elif [ "${SEC}" == "build" ]; then
 
-	  if [ eq ]; then
+	  if [ ${eq} ]; then
 	    case "${line}" in
 
 	      njobs* )
