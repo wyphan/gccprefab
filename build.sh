@@ -274,11 +274,6 @@ TREE=""
 # Verbosity
 VERBOSE=0
 
-# Current development branch
-SRCDIR_DEV="${ROOTDIR}/src"
-BLDDIR_DEV="${ROOTDIR}/build/dev"
-TREE_DEV=
-
 # Prerequisites
 declare -a PREREQS
 PREREQS+=("gmp")
@@ -385,7 +380,7 @@ pushd "${BLDDIR}"
   stamp "Configure..."
   CFGSCR="${SRCDIR}/configure"
   echo "$ ${CFGSCR} ${FLAGS[@]} > ${CFGLOG} 2>&1"
-  "${CFGSCR}" ${CFG[@]} > ${CFGLOG} 2>&1
+  "${CFGSCR}" ${FLAGS[@]} > ${CFGLOG} 2>&1
   status 3 "configure" "${CFGLOG}"
 
   # Build
