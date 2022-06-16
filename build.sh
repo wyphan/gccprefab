@@ -292,7 +292,6 @@ def_languages() {
 # Set up configure flags
 CFGFLAGS=""
 declare -a FLAGS
-FLAGS+=("--prefix=${BLDDIR}")
 
 # Set up list of tests
 declare -a CHECKS
@@ -309,6 +308,7 @@ else
       # Read build config file
       readcfg -1 "$1"
       FLAGS+=("--languages=$(commalist ${LANGUAGES[@]})")	
+      FLAGS+=("--prefix=${BLDDIR}")
       ;;
   esac
 fi # argc
