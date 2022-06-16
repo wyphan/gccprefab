@@ -213,7 +213,7 @@ readcfg() {
 	    verb 1 "Using default languages: ${LANGUAGES[@]}"
 	  else
 	    LANG=${line}
-	    push_lang $(LANG)
+	    push_lang ${LANG}
 	    verb 1 "Add language: ${LANG}"
 	  fi # default
 
@@ -304,7 +304,7 @@ else
     * )
       # Read build config file
       readcfg -1 "$1"
-      FLAGS+=("--languages=$(commalist ${LANGUAGES[@]})")	
+      FLAGS+=("--enable-languages=$(commalist ${LANGUAGES[@]})")
       FLAGS+=("--prefix=${BLDDIR}")
       ;;
   esac
