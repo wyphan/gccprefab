@@ -1,4 +1,4 @@
-\#!/bin/bash
+#!/bin/bash
 
 whatscr() { echo "gccprefab - Wil's GCC easy build script"; }
 whenscr() { echo "Last updated: Jun 11, 2022 (WYP)"; }
