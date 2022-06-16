@@ -100,13 +100,6 @@ readcfg() {
           push_flag "${FLAG}"
 	  verb 1 "Addition flag: ${FLAG}"
 
-	elif [ "${SEC}" == "languages" ]; then
-
-	  # Add language
-	  LANG="${val}"
-	  push_lang "${LANG}"
-	  verb 1 "Add language: ${LANG}"
-
 	else
 
 	  echo "Addition not implemented for section ${SEC}"
@@ -218,6 +211,10 @@ readcfg() {
 	  if [ "${line}" == "default" ]; then	
 	    def_languages
 	    verb 1 "Using default languages: ${LANGUAGES[@]}"
+	  else
+	    LANG=${line}
+	    push_lang $(LANG)
+	    verb 1 "Add language: ${LANG}"
 	  fi # default
 
 	elif [ "${SEC}" == "checks" ]; then
